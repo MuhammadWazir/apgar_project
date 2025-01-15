@@ -182,6 +182,7 @@ def register_page():
     if st.button("Go to Login", key="goto_login_button"): 
         st.session_state.page = "Login"
         st.rerun()
+
 # Login with face recognition
 def login_with_face_page():
     st.title("Login with Face Recognition")
@@ -251,3 +252,5 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
+if __name__ == "__main__":
+    main()
