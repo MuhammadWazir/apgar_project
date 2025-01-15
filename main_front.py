@@ -11,7 +11,7 @@ INTERESTS_ENDPOINT = f"{API_BASE_URL}/interests"
 COURSES_ENDPOINT = f"{API_BASE_URL}/courses"
 UPLOAD_COURSES_ENDPOINT = f"{API_BASE_URL}/upload-courses-pdf"
 LOGIN_FACE_ENDPOINT = f"{API_BASE_URL}/login_with_face"
-INTERESTS_ENDPOINT = f"{API_BASE_URL}/interests"
+
 COURSES_ENDPOINT = f"{API_BASE_URL}/courses"
 
 def main():

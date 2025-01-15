@@ -16,25 +16,26 @@ from pydantic import EmailStr
 import spacy
 import requests
 from sqlalchemy.sql import func
-import PyPDF2
-import io
-import re
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import Depends, UploadFile, File, HTTPException
 from sqlalchemy.orm import Session
-
 from sqlalchemy.orm import relationship, Session
 import spacy
-
-
 import face_recognition
 import numpy as np
 from fastapi import FastAPI, Depends, HTTPException, File, UploadFile
 from sqlalchemy.orm import Session
-from typing import Optional
 import io
 from PIL import Image
-
 from create_db import Course, User, Interest, RecommendedCourse
+import io
+import re
+from fastapi import HTTPException, UploadFile, File, Depends
+from sqlalchemy.orm import Session
+from datetime import datetime
+from typing import List, Dict
+import re
+from io import BytesIO
+import pdfplumber
 
 # Database setup - Using existing rec.db
 SQLALCHEMY_DATABASE_URL = "sqlite:///./rec.db"
@@ -43,8 +44,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # JWT settings
-SECRET_KEY = "12345"  # In production, use a secure secret key
-ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 load_dotenv()
@@ -52,6 +51,8 @@ load_dotenv()
 HUNTER_API_KEY = os.getenv("HUNTER_API_KEY")
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 
 # OAuth2 scheme
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
@@ -143,7 +144,8 @@ conf = ConnectionConfig(
     MAIL_SERVER="outlook.office365.com",
     MAIL_STARTTLS=True,
     MAIL_SSL_TLS=False,
-    USE_CREDENTIALS=True
+    USE_CREDENTIALS=True,
+    SUPPRESS_SEND=False
 )
 # Endpoints
 @app.post("/register", status_code=201)
@@ -211,14 +213,14 @@ async def register(
 
 @app.post("/login")
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
-    print(f"Login attempt for email: {user_credentials.email}")  # Debug print
+    print(f"Login attempt for email: {user_credentials.email}") 
     try:
         # Fetch user from the database
         user = db.query(User).filter(User.email == user_credentials.email).first()
-        print(f"User found: {user is not None}")  # Debug print
+        print(f"User found: {user is not None}")
         
         if not user:
-            print("No user found with this email")  # Debug print
+            print("No user found with this email")  
             raise HTTPException(
                 status_code=401,
                 detail="Incorrect email or password"
@@ -232,19 +234,19 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
                 detail="Incorrect email or password"
             )
         access_token = create_access_token(data={"sub": user.email, "role": user.role})
-        # message = MessageSchema(
-        #     subject="Login Notification",
-        #     recipients=[user.email],
-        #     body=f"Hi {user.firstname}, you just logged into your account.",
-        #     subtype="plain"
-        # )
-        # try:
-        #     fm = FastMail(conf)
-        #     await fm.send_message(message)
-        #     print("Sent")
-        # except Exception as e:
-        #     print(f"Error sending email: {e}") 
-        #     raise HTTPException(status_code=500, detail="Failed to send email")
+        message = MessageSchema(
+            subject="Login Notification",
+            recipients=[user.email],
+            body=f"Hi {user.firstname}, you just logged into your account.",
+            subtype="plain"
+        )
+        try:
+            fm = FastMail(conf)
+            await fm.send_message(message)
+            print("Sent")
+        except Exception as e:
+            print(f"Error sending email: {e}") 
+            raise HTTPException(status_code=500, detail="Failed to send email")
 
 
         return {"token": access_token, "role": user.role, "status": "success"}
@@ -323,38 +325,9 @@ async def login_with_face(
             detail=f"An error occurred during face login: {str(e)}"
         )
 
-
-import io
-import re
-
-from fastapi import HTTPException, UploadFile, File, Depends
-from sqlalchemy.orm import Session
-from datetime import datetime
-import PyPDF2
-
-from typing import List, Dict
-import PyPDF2
-import re
-from io import BytesIO
-
-from typing import List, Dict
-import PyPDF2
-import re
-from io import BytesIO
-import logging
-
-
-import re
-from typing import List, Dict
-from io import BytesIO
-import PyPDF2
-
-import pdfplumber
+# ----------------------- Extract PDF -------------------------------------------
 
 def extract_courses_info(pdf_content: bytes) -> List[Dict]:
-    """
-    Extract course information from PDF content using pdfplumber.
-    """
     pdf_file = BytesIO(pdf_content)
     courses = []
 
@@ -364,10 +337,9 @@ def extract_courses_info(pdf_content: bytes) -> List[Dict]:
             text += page.extract_text()
 
     # Normalize the text
-    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces/newlines with a single space
-    text = text.replace("Schedule :", "Schedule:")  # Fix extra space after "Schedule"
+    text = re.sub(r'\s+', ' ', text)  
+    text = text.replace("Schedule :", "Schedule:")  
 
-    # Debug the normalized text
     print("Normalized Text:")
     print(text)
 
@@ -390,29 +362,6 @@ def extract_courses_info(pdf_content: bytes) -> List[Dict]:
 
     return courses
 
-
-
-def debug_pdf_content(content: bytes) -> dict:
-    """
-    Debug helper to see what's being extracted from the PDF
-    """
-    pdf_file = BytesIO(content)
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-        
-    # Count how many "Course:" instances we find
-    course_count = text.count("Course:")
-    schedule_count = text.count("Schedule:")
-    
-    return {
-        "raw_text": text,
-        "course_count": course_count,
-        "schedule_count": schedule_count,
-        "text_length": len(text)
-    }
 
 @app.post("/preview-courses-pdf/")
 async def preview_courses_pdf(
@@ -443,6 +392,7 @@ async def preview_courses_pdf(
         )
     finally:
         await file.close()
+
 
 @app.post("/upload-courses-pdf/")
 async def upload_courses_pdf(
@@ -539,82 +489,71 @@ async def delete_course(
     if not course:
         raise HTTPException(status_code=404, detail="Course not found.")
 
+from fastapi import FastAPI, Depends, HTTPException
+from sqlalchemy.orm import Session
+from fastapi_mail import FastMail, MessageSchema
+import asyncio
+from typing import List, Tuple
+from pydantic import BaseModel
 
+class InterestUpdate(BaseModel):
+    interests: List[str]
 
+async def update_user_recommendations(db: Session, user_id: int) -> Tuple[str, str, List[str]]:
 
-# ---------------------------------------------------------------------------------------
-
-async def update_user_recommendations(db: Session, user_id: int):
-    nlp = spacy.load("en_core_web_lg")
-    
-    # Get user and their interests
-    user = db.query(User).filter(User.id == user_id).first()
-    user_interests = [interest.interest for interest in user.interests]
-    interest_docs = [nlp(interest.lower()) for interest in user_interests]
-    
-    # Clear existing recommendations
-    db.query(RecommendedCourse).filter(RecommendedCourse.user_id == user_id).delete()
-    
-    # Get all courses
-    all_courses = db.query(Course).all()
-    
-    # Calculate new recommendations
-    new_recommendations = []
-    recommended_courses_details = []  # To store details for the email
-    
-    for course in all_courses:
-        course_text = f"{course.title}"
-        course_doc = nlp(course_text.lower())
+    def process_recommendations():
+        nlp = spacy.load("en_core_web_lg")
         
-        similarity_scores = [
-            course_doc.similarity(interest_doc)
-            for interest_doc in interest_docs
-        ]
-        
-        max_similarity = max(similarity_scores) if similarity_scores else 0
-        
-        if max_similarity >= 0.55:
-            recommendation = RecommendedCourse(
-                user_id=user_id,
-                course_id=course.id,
-                similarity_score=max_similarity
-            )
-            new_recommendations.append(recommendation)
-            
-            # Collect course details for the email
-            recommended_courses_details.append(
-                f"Course: {course.title}\n"
-                f"Description: {course.description}\n"
-                f"Similarity Score: {max_similarity:.2f}\n"
-            )
-    
-    db.bulk_save_objects(new_recommendations)
-    db.commit()  # Commit the recommendations before sending the email
-    
-    # Create email content
-    courses_info = "\n\n".join(recommended_courses_details)
-    email_body = (
-        f"Hi {user.firstname},\n\n"
-        f"Here are some course recommendations based on your interests:\n\n"
-        f"{courses_info}\n\n"
-        f"Best regards,\nYour Team"
-    )
-    
-    message = MessageSchema(
-        subject="Recommended Courses for You",
-        recipients=[user.email],
-        body=email_body,
-        subtype="plain"
-    )
-    
-    try:
-        fm = FastMail(conf)
-        await fm.send_message(message)
-        print("Email sent successfully.")
-    except Exception as e:
-        print(f"Error sending email: {e}")
-        raise HTTPException(status_code=500, detail="Failed to send email")
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
+        user_interests = [interest.interest for interest in user.interests]
+        interest_docs = [nlp(interest.lower()) for interest in user_interests]
+
+        # Clear existing recommendations
+        db.query(RecommendedCourse).filter(RecommendedCourse.user_id == user_id).delete()
+
+        # Fetch all courses
+        all_courses = db.query(Course).all()
+
+        # Generate recommendations
+        new_recommendations = []
+        recommended_courses_details = []
+
+        for course in all_courses:
+            course_text = f"{course.title}"
+            course_doc = nlp(course_text.lower())
+
+            similarity_scores = [
+                course_doc.similarity(interest_doc) for interest_doc in interest_docs
+            ]
+
+            max_similarity = max(similarity_scores) if similarity_scores else 0
+
+            if max_similarity >= 0.55:
+                recommendation = RecommendedCourse(
+                    user_id=user_id,
+                    course_id=course.id,
+                    similarity_score=max_similarity
+                )
+                new_recommendations.append(recommendation)
+
+                recommended_courses_details.append(
+                    f"Course: {course.title}\n"
+                    f"Description: {course.description}\n"
+                    f"Similarity Score: {max_similarity:.2f}\n"
+                )
+
+        # Save recommendations to the database
+        db.bulk_save_objects(new_recommendations)
+        db.commit()
+
+        return user.firstname, user.email, recommended_courses_details
+
+    # Run CPU-intensive work in a thread pool
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, process_recommendations)
 
 @app.post("/interests")
 async def update_interests(
@@ -632,12 +571,39 @@ async def update_interests(
     
     db.commit()
     
-    # Update recommendations explicitly after deleting interests
-    update_user_recommendations(db, current_user.id)
+    # Update recommendations and get email details
+    firstname, email, recommended_courses_details = await update_user_recommendations(db, current_user.id)
+
+    # Prepare email content
+    courses_info = "\n\n".join(recommended_courses_details) or "No courses match your interests."
+    print(courses_info)
+
+    email_body = (
+        f"Hi {firstname},\n\n"
+        f"Here are some course recommendations based on your interests:\n\n"
+        f"{courses_info}\n\n"
+        f"Best regards,\nYour Team"
+    )
+
+    # Send email
+    message = MessageSchema(
+        subject="Recommended Courses for You",
+        recipients=[email],
+        body=email_body,
+        subtype="plain"
+    )
+
+    try:
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        print("Email sent successfully.")
+    except Exception as e:
+        print(f"Error sending email: {repr(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to send email: {repr(e)}")
     
     return {"message": "Interests updated successfully"}
 
-# Modified course recommendation endpoint
+
 @app.get("/courses")
 async def get_recommended_courses(
     current_user: User = Depends(get_current_user),
@@ -662,7 +628,6 @@ async def get_recommended_courses(
         ]
     }
 
-
 @app.get("/admin/interest_stats")
 def get_interest_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -682,75 +647,4 @@ def get_recommendation_stats(db: Session = Depends(get_db), current_user: User =
               .group_by(Course.title).all()
     return [{"course_title": stat[0], "count": stat[1]} for stat in stats]
 
-# @app.post("/interests")
-# async def update_interests(
-#     interests_update: InterestUpdate,
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     # Clear existing interests
-#     db.query(Interest).filter(Interest.user_id == current_user.id).delete()
-    
-#     # Add new interests
-#     for interest in interests_update.interests:
-#         db_interest = Interest(interest=interest, user_id=current_user.id)
-#         db.add(db_interest)
-    
-#     db.commit()
-#     return {"message": "Interests updated successfully"}
 
-
-
-# @app.get("/courses")
-# async def get_recommended_courses(
-#     current_user: User = Depends(get_current_user),
-#     db: Session = Depends(get_db)
-# ):
-#     nlp = spacy.load("en_core_web_lg")
-#     # Get user interests
-#     user_interests = [interest.interest for interest in current_user.interests]
-    
-#     # Process user interests with spaCy
-#     interest_docs = [nlp(interest.lower()) for interest in user_interests]
-    
-#     # Get all courses from database
-#     all_courses = db.query(Course).all()
-#     recommended_courses = []
-    
-#     for course in all_courses:
-#         # Combine category and description for better matching
-#         course_text = f"{course.category} {course.description}"
-#         course_doc = nlp(course_text.lower())
-        
-#         # Calculate similarity scores for each user interest
-#         similarity_scores = [
-#             course_doc.similarity(interest_doc)
-#             for interest_doc in interest_docs
-#         ]
-        
-#         # Get the maximum similarity score
-#         max_similarity = max(similarity_scores)
-        
-#         # If similarity score is above threshold, add course to recommendations
-#         if max_similarity >= 0.8:
-#             recommended_courses.append({
-#                 "course": course,
-#                 "similarity_score": max_similarity
-#             })
-    
-#     # Sort recommendations by similarity score in descending order
-#     recommended_courses.sort(key=lambda x: x["similarity_score"], reverse=True)
-    
-#     return {
-#         "courses": [
-#             {
-#                 "title": rec["course"].title,
-#                 "category": rec["course"].category,
-#                 "description": rec["course"].description,
-#                 "similarity_score": round(rec["similarity_score"], 2)
-#             }
-#             for rec in recommended_courses
-#         ]
-#     }
-
-#
