@@ -252,9 +252,6 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
-<<<<<<< HEAD
+
 if __name__ =="__main__":
-=======
-if __name__ == "__main__":
->>>>>>> 2244b9f48352d5520e417851783346d7294b313a
     main()
