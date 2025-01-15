@@ -5,6 +5,8 @@ API_BASE_URL = "http://localhost:8000"  # Replace with your backend URL
 REGISTER_ENDPOINT = f"{API_BASE_URL}/register"
 LOGIN_ENDPOINT = f"{API_BASE_URL}/login"
 LOGIN_FACE_ENDPOINT = f"{API_BASE_URL}/login_with_face"
+INTERESTS_ENDPOINT = f"{API_BASE_URL}/interests"
+COURSES_ENDPOINT = f"{API_BASE_URL}/courses"
 
 def main():
     apply_custom_style() 
@@ -29,6 +31,10 @@ def main():
         login_page()
     elif st.session_state.page == "Login With Face":
         login_with_face_page()
+    elif st.session_state.page == "Pick Interests":
+        interests_page()
+    elif st.session_state.page == "Recommend Courses":
+        recommend_courses_page()
 
 def apply_custom_style():
     st.markdown(
@@ -134,7 +140,7 @@ def register_page():
         camera_image = st.camera_input("Camera Input", key="register_camera")
     
     if st.button("Register", key="register_button"):  # Added unique key
-        if not all([first_name, last_name, email, password,confirm_password, phone_number, camera_image]):
+        if not all([first_name, last_name, email, password, confirm_password, phone_number, camera_image]):
             st.error("All fields including face photo are required.")
             return
             
@@ -156,23 +162,32 @@ def register_page():
             }
             
             with st.spinner("Registering..."):
-                st.write("Sending registration request...")
                 response = requests.post(
                     REGISTER_ENDPOINT,
                     data=data,
                     files=files
                 )
-                
-                st.write(f"Response status code: {response.status_code}")
-                
+                st.write("Response status code:", response.status_code)
+                st.write("Response content:", response.content)
                 if response.status_code == 201:
                     st.success("Registration successful! Please login.")
                     st.session_state.page = "Login"
                     st.rerun()
                 else:
-                    error_detail = response.json().get("detail", "Registration failed.")
-                    st.error(f"Registration failed: {error_detail}")
-                    st.write(f"Full response: {response.text}")
+                    try:
+                        error_response = response.json()
+                        if "Email verification failed" in error_response.get("detail", ""):
+                            st.error("""
+                                Email verification failed. Please ensure:
+                                - You've entered the email correctly
+                                - The email domain exists
+                                - The email address is valid and active
+                                Try using a different email address or contact support if the issue persists.
+                            """)
+                        else:
+                            st.error(f"Registration failed: {error_response.get('detail', 'Unknown error')}")
+                    except Exception as e:
+                        st.error(f"Registration failed: Unable to process server response")
                     
         except requests.exceptions.RequestException as e:
             st.error(f"Connection error: {str(e)}")
@@ -252,9 +267,139 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
-<<<<<<< HEAD
-if __name__ =="__main__":
-=======
+
+def interests_page():
+    st.title("Pick Interests")
+
+    if "token" not in st.session_state:
+        st.error("You must be logged in to access this page.")
+        st.session_state.page = "Login"
+        return
+
+    with st.form("interests_form"):
+        interests = st.multiselect(
+            "Select your interests:",
+            ["Machine Learning", "Data Science", "Web Development", "Mobile Development", "AI",
+             "Career Switch to Tech",
+                "Skill Enhancement",
+                "Personal Project",
+                "Academic Research",
+                "Professional Development",
+                "Starting a Tech Business",
+                "Cybersecurity",
+            "Blockchain",
+            "Internet of Things (IoT)",
+            "Game Development",
+            "UI/UX Design",
+            "Embedded Systems",
+            "AR/VR Development",
+            "Quantum Computing",
+            "Python",
+            "JavaScript",
+            "Java",
+            "C++",
+            "Go",
+            "Rust",
+            "TypeScript",
+            "SQL",
+            "Web Development",
+            "Mobile App Development",
+            "Backend Development",
+            "Frontend Development",
+            "Full Stack Development",
+            "API Development",
+            "DevOps",
+            "Cloud Computing"
+             ]
+        )
+        submit = st.form_submit_button("Save Interests")
+
+        if submit:
+            response = requests.post(INTERESTS_ENDPOINT, json={"interests": interests}, headers={
+                "Authorization": f"Bearer {st.session_state.token}"
+            })
+
+            if response.status_code == 200:
+                st.success("Interests saved successfully!")
+                st.session_state.page = "Recommend Courses"
+                st.rerun()
+            else:
+                st.error(response.json().get("detail", "Failed to save interests."))
+def recommend_courses_page():
+    st.title("Recommended Courses")
+
+    if "token" not in st.session_state:
+        st.error("You must be logged in to access this page.")
+        st.session_state.page = "Login"
+        return
+
+    try:
+        response = requests.get(
+            COURSES_ENDPOINT, 
+            headers={"Authorization": f"Bearer {st.session_state.token}"}
+        )
+
+        # Check if response is successful and contains content
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                courses = data.get("courses", [])
+                
+                if courses:
+                    st.write("Here are some recommended courses based on your interests:")
+                    
+                    # Create columns for better layout
+                    for course in courses:
+                        with st.expander(f"📚 {course['title']} - Match Score: {course['similarity_score']}"):
+                            st.write(f"**title:** {course['title']}")
+                            st.write(f"**Description:** {course['description']}")
+                            
+                            # Add a visual indicator for similarity score
+                            score = float(course['similarity_score'])
+                            st.progress(score)
+                            
+                            # Optional: Add action buttons
+                            col1, col2 = st.columns(2)
+                            with col1:
+                                if st.button("Enroll", key=f"enroll_{course['title']}"):
+                                    st.success(f"Enrolled in {course['title']}!")
+                            with col2:
+                                if st.button("Learn More", key=f"more_{course['title']}"):
+                                    st.info("Course details page coming soon!")
+                else:
+                    st.info("No courses match your interests at this time. Try updating your interests!")
+                    
+                    # Add a button to update interests
+                    if st.button("Update Interests"):
+                        st.session_state.page = "Pick Interests"
+                        st.rerun()
+            
+            except requests.exceptions.JSONDecodeError:
+                st.error("Error parsing the server response. Please try again later.")
+                
+        elif response.status_code == 401:
+            st.error("Your session has expired. Please log in again.")
+            st.session_state.page = "Login"
+            st.rerun()
+            
+        elif response.status_code == 404:
+            st.warning("The course recommendation service is currently unavailable.")
+            
+        else:
+            try:
+                error_msg = response.json().get("detail", "An unknown error occurred.")
+                st.error(f"Error: {error_msg}")
+            except:
+                st.error(f"Error: Server returned status code {response.status_code}")
+                
+    except requests.exceptions.RequestException as e:
+        st.error(f"Failed to connect to the server: {str(e)}")
+
+    # Add logout button with confirmation
+    if st.button("Log Out"):
+        if st.button("Confirm Logout"):
+            st.session_state.clear()
+            st.session_state.page = "Login"
+            st.rerun()
 if __name__ == "__main__":
->>>>>>> 2244b9f48352d5520e417851783346d7294b313a
     main()

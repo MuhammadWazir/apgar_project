@@ -9,10 +9,11 @@ from typing import List
 from jose import jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
-
+from dotenv import load_dotenv
+import os
 
 import spacy
-
+import requests
 import PyPDF2
 import io
 import re
@@ -44,6 +45,9 @@ SECRET_KEY = "12345"  # In production, use a secure secret key
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
+load_dotenv()
+
+HUNTER_API_KEY = os.getenv("HUNTER_API_KEY")
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
@@ -78,6 +82,18 @@ def get_db():
     finally:
         db.close()
 
+def verify_email_with_hunter(email: str) -> dict:
+    url = f"https://api.hunter.io/v2/email-verifier?email={email}&api_key={HUNTER_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json()
+    elif response.status_code == 401:
+        raise HTTPException(status_code=401, detail="Invalid Hunter API key.")
+    elif response.status_code == 429:
+        raise HTTPException(status_code=429, detail="Hunter API rate limit exceeded.")
+    else:
+        raise HTTPException(status_code=response.status_code, detail=response.text)
+    
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -130,58 +146,58 @@ async def register(
     face_image: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
-    print(f"Received: {first_name}, {last_name}, {email}, {password}, {face_image.filename}")
+    # Verify email using Hunter API
+    try:
+        email_verification_result = verify_email_with_hunter(email)
+        if email_verification_result.get("data", {}).get("result") != "deliverable":
+            raise HTTPException(status_code=400, detail="Invalid or undeliverable email.")
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email verification failed: {str(e)}")
+
     # Check if email already exists
     db_user = db.query(User).filter(User.email == email).first()
     if db_user:
-        raise HTTPException(status_code=400, detail="Email already registered")
-    
+        raise HTTPException(status_code=400, detail="Email already registered.")
+
     # Process the face image
     try:
-        # Read and convert the image
         contents = await face_image.read()
         image = Image.open(io.BytesIO(contents))
-        # Convert to RGB if needed
         if image.mode != 'RGB':
             image = image.convert('RGB')
-        # Convert to numpy array
         image_np = np.array(image)
-        
-        # Detect faces in the image
         face_locations = face_recognition.face_locations(image_np)
-        if not face_locations:
-            raise HTTPException(status_code=400, detail="No face detected in the image")
-        if len(face_locations) > 1:
-            raise HTTPException(status_code=400, detail="Multiple faces detected in the image")
-        
-        # Generate face encoding
+        if len(face_locations) != 1:
+            raise HTTPException(status_code=400, detail="Invalid face image: Please ensure one face is visible.")
         face_signature = face_recognition.face_encodings(image_np, face_locations)[0]
-        
-        # Check if this face is already registered
+
+        # Check if face is already registered
         existing_users = db.query(User).filter(User.face_signature.isnot(None)).all()
         for existing_user in existing_users:
             existing_encoding = np.frombuffer(existing_user.face_signature)
             if face_recognition.compare_faces([existing_encoding], face_signature)[0]:
-                raise HTTPException(status_code=400, detail="This face is already registered")
-        
+                raise HTTPException(status_code=400, detail="This face is already registered.")
+
         # Create new user
         hashed_password = get_password_hash(password)
-        db_user = User(
+        new_user = User(
             firstname=first_name,
             lastname=last_name,
-            phone= phone_number,
-            email= email,
+            phone=phone_number,
+            email=email,
             hashed_password=hashed_password,
-            role="user",
-            face_signature=face_signature.tobytes()  # Convert numpy array to bytes for storage
+            face_signature=face_signature.tobytes()
         )
-        db.add(db_user)
+        db.add(new_user)
         db.commit()
-        
-        return {"message": "User created successfully"}
-        
+
+        return {"message": "User registered successfully."}
+
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Face processing failed: {str(e)}")
 
 @app.post("/login")
 async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
