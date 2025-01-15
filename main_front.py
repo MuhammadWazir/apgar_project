@@ -1,9 +1,14 @@
 import streamlit as st
 import requests
+import time
+
 
 API_BASE_URL = "http://localhost:8000"
 REGISTER_ENDPOINT = f"{API_BASE_URL}/register"
 LOGIN_ENDPOINT = f"{API_BASE_URL}/login"
+INTERESTS_ENDPOINT = f"{API_BASE_URL}/interests"
+COURSES_ENDPOINT = f"{API_BASE_URL}/courses"
+UPLOAD_COURSES_ENDPOINT = f"{API_BASE_URL}/upload-courses-pdf"
 LOGIN_FACE_ENDPOINT = f"{API_BASE_URL}/login_with_face"
 INTERESTS_ENDPOINT = f"{API_BASE_URL}/interests"
 COURSES_ENDPOINT = f"{API_BASE_URL}/courses"
@@ -31,10 +36,24 @@ def main():
         login_page()
     elif st.session_state.page == "Login With Face":
         login_with_face_page()
+<<<<<<< HEAD
+#    elif st.session_state.page == "Pick Interests":
+#        interests_page()
+#    elif st.session_state.page == "Recommend Courses":
+#        recommend_courses_page()
+    elif st.session_state.page == "Admin Dashboard":
+        admin_dashboard_page()
+    elif st.session_state.page == "Admin Upload":
+        admin_upload_page()
+
+
+
+=======
     elif st.session_state.page == "Pick Interests":
         interests_page()
     elif st.session_state.page == "Recommend Courses":
         recommend_courses_page()
+>>>>>>> 763acdd0051e927ff70f4dbead295e23d75e723f
 
 def apply_custom_style():
     st.markdown(
@@ -336,6 +355,149 @@ def login_page():
 def interests_page():
     st.title("Pick Interests")
 
+<<<<<<< HEAD
+
+def admin_upload_page():
+    st.title("Admin Dashboard")
+
+    if "token" not in st.session_state or st.session_state.get("role") != "admin":
+        st.error("Access denied. You must be an admin to view this page.")
+        st.session_state.page = "Login"
+        return
+
+    st.write("Welcome, Admin!")
+    
+    # PDF Upload Section
+    st.subheader("Upload PDF for Processing")
+    uploaded_file = st.file_uploader("Choose a PDF file", type=["pdf"])
+
+    if uploaded_file is not None:
+        try:
+            # Preview request
+            preview_response = requests.post(
+                f"{API_BASE_URL}/preview-courses-pdf",
+                headers={"Authorization": f"Bearer {st.session_state.token}"},
+                files={"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")},
+            )
+
+            if preview_response.status_code == 200:
+                courses = preview_response.json()["courses"]
+                
+                # Main content area
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    if len(courses) > 0:
+                        st.subheader(f"Found {len(courses)} Courses")
+                        for i, course in enumerate(courses, 1):
+                            st.markdown(f"""
+                            **Course {i}: {course['title']}**
+                            - **Description:** {course['description']}
+                            - **Schedule:** {course['schedule']}
+                            ---
+                            """)
+                    else:
+                        st.error("No courses were found in the PDF.")
+                        st.markdown("### PDF Content Preview")
+                        st.text(preview_response.json().get("debug_info", {}).get("raw_text", "No content available"))
+                
+                with col2:
+                    if len(courses) > 0:
+                        if st.button("Confirm Upload"):
+                            upload_response = requests.post(
+                                f"{API_BASE_URL}/upload-courses-pdf",
+                                headers={"Authorization": f"Bearer {st.session_state.token}"},
+                                files={"file": (uploaded_file.name, uploaded_file.getvalue(), "application/pdf")},
+                            )
+
+                            if upload_response.status_code == 200:
+                                st.success("Courses uploaded successfully!")
+                                time.sleep(2)
+                                st.rerun()
+                            else:
+                                st.error("Failed to upload courses.")
+                
+            else:
+                st.error("Failed to preview PDF content.")
+                
+        except requests.exceptions.RequestException as e:
+            st.error(f"Connection error: {str(e)}")
+
+    # Logout button at the bottom
+    st.button("Log Out", on_click=lambda: setattr(st.session_state, "page", "Login"))
+
+    
+def admin_dashboard_page():
+    st.title("Admin Dashboard")
+
+    if "token" not in st.session_state or st.session_state.get("role") != "admin":
+        st.error("Access denied. You must be an admin to view this page.")
+        st.session_state.page = "Login"
+        return
+
+    st.write("Welcome, Admin!")
+
+    # Fetch and display all courses
+    st.subheader("Manage Courses")
+    try:
+        response = requests.get(
+            f"{API_BASE_URL}/courses/all", 
+            headers={"Authorization": f"Bearer {st.session_state.token}"}
+        )
+        if response.status_code == 200:
+            courses = response.json()
+            if not courses:
+                st.info("No courses available.")
+            else:
+                for course in courses:
+                    with st.expander(f"📘 {course['title']}"):
+                        st.write(f"**Category:** {course['category']}")
+                        st.write(f"**Description:** {course['description']}")
+                        # Assign unique key for each button
+                        if st.button(f"Delete {course['title']}", key=f"delete_{course['id']}"):
+                            delete_response = requests.delete(
+                                f"{API_BASE_URL}/courses/{course['id']}",
+                                headers={"Authorization": f"Bearer {st.session_state.token}"}
+                            )
+                            if delete_response.status_code == 200:
+                                st.success(f"Course '{course['title']}' deleted successfully!")
+                                st.rerun()
+                            else:
+                                st.error(delete_response.json().get("detail", "Failed to delete course."))
+        else:
+            st.error(response.json().get("detail", "Failed to fetch courses."))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection error: {str(e)}")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+if __name__ =="__main__":
+=======
     if "token" not in st.session_state:
         st.error("You must be logged in to access this page.")
         st.session_state.page = "Login"
@@ -467,4 +629,5 @@ def recommend_courses_page():
             st.session_state.page = "Login"
             st.rerun()
 if __name__ == "__main__":
+>>>>>>> 763acdd0051e927ff70f4dbead295e23d75e723f
     main()

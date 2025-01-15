@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, LargeBinary
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
-from typing import List
+from typing import List, Dict
 from jose import jwt
 from datetime import datetime, timedelta
 from passlib.context import CryptContext
@@ -62,9 +62,7 @@ class UserCreate(BaseModel):
     last_name: str
     phone_number: str
     email: str
-    password: str
-    
-
+    password: str 
 class UserLogin(BaseModel):
     email: str
     password: str
@@ -325,6 +323,225 @@ async def login_with_face(
         )
 
 
+import io
+import re
+
+from fastapi import HTTPException, UploadFile, File, Depends
+from sqlalchemy.orm import Session
+from datetime import datetime
+import PyPDF2
+
+from typing import List, Dict
+import PyPDF2
+import re
+from io import BytesIO
+
+from typing import List, Dict
+import PyPDF2
+import re
+from io import BytesIO
+import logging
+
+# import pdfplumber
+
+import re
+from typing import List, Dict
+from io import BytesIO
+import PyPDF2
+
+import pdfplumber
+
+def extract_courses_info(pdf_content: bytes) -> List[Dict]:
+    """
+    Extract course information from PDF content using pdfplumber.
+    """
+    pdf_file = BytesIO(pdf_content)
+    courses = []
+
+    with pdfplumber.open(pdf_file) as pdf:
+        text = ""
+        for page in pdf.pages:
+            text += page.extract_text()
+
+    # Normalize the text
+    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces/newlines with a single space
+    text = text.replace("Schedule :", "Schedule:")  # Fix extra space after "Schedule"
+
+    # Debug the normalized text
+    print("Normalized Text:")
+    print(text)
+
+    # Pattern to extract courses
+    course_pattern = re.compile(
+        r"Course:\s*(.+?)\s*\.\s*(.+?)\s*Schedule\s*:\s*(.+?)(?=Course:|$)",
+        re.DOTALL
+    )
+
+    # Extract courses using the pattern
+    for match in course_pattern.finditer(text):
+        title = match.group(1).strip()
+        description = match.group(2).strip()
+        schedule = match.group(3).strip()
+        courses.append({
+            "title": title,
+            "description": description,
+            "schedule": schedule
+        })
+
+    return courses
+
+
+
+def debug_pdf_content(content: bytes) -> dict:
+    """
+    Debug helper to see what's being extracted from the PDF
+    """
+    pdf_file = BytesIO(content)
+    pdf_reader = PyPDF2.PdfReader(pdf_file)
+    
+    text = ""
+    for page in pdf_reader.pages:
+        text += page.extract_text()
+        
+    # Count how many "Course:" instances we find
+    course_count = text.count("Course:")
+    schedule_count = text.count("Schedule:")
+    
+    return {
+        "raw_text": text,
+        "course_count": course_count,
+        "schedule_count": schedule_count,
+        "text_length": len(text)
+    }
+
+@app.post("/preview-courses-pdf/")
+async def preview_courses_pdf(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Endpoint to preview PDF content before uploading
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can preview courses")
+
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+        courses_info = extract_courses_info(content)
+        
+        return {
+            "message": f"Found {len(courses_info)} courses",
+            "courses": courses_info
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
+    finally:
+        await file.close()
+
+@app.post("/upload-courses-pdf/")
+async def upload_courses_pdf(
+    file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Endpoint to handle PDF upload and process course information
+    """
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can upload courses")
+
+    if not file.filename.endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    try:
+        content = await file.read()
+        courses_info = extract_courses_info(content)
+        
+        uploaded_at = datetime.utcnow()
+        new_courses = []
+        
+        for course_info in courses_info:
+            new_course = Course(
+                title=course_info["title"],
+                description=course_info["description"],
+                schedule=course_info["schedule"],
+                uploaded_at=uploaded_at
+            )
+            db.add(new_course)
+            new_courses.append(new_course)
+        
+        try:
+            db.commit()
+        except Exception as db_error:
+            db.rollback()
+            raise HTTPException(
+                status_code=500, 
+                detail=f"Database error: {str(db_error)}"
+            )
+        
+        return {
+            "message": f"Successfully added {len(new_courses)} courses",
+            "courses": [
+                {
+                    "title": course.title,
+                    "description": course.description,
+                    "schedule": course.schedule,
+                    "uploaded_at": course.uploaded_at
+                } for course in new_courses
+            ]
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing PDF: {str(e)}"
+        )
+    finally:
+        await file.close()
+
+
+
+@app.get("/courses/all", response_model=List[dict])
+async def get_all_courses(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can access this resource.")
+
+    courses = db.query(Course).all()
+    return [
+        {
+            "id": course.id,
+            "title": course.title,
+            "description": course.description,
+            "schedule": course.schedule,
+            "uploaded_at": course.uploaded_at
+        } for course in courses
+    ]
+
+@app.delete("/courses/{course_id}")
+async def delete_course(
+    course_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Only admins can delete courses.")
+
+    course = db.query(Course).filter(Course.id == course_id).first()
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found.")
+
+
+
+
 # ---------------------------------------------------------------------------------------
 
 def update_user_recommendations(db: Session, user_id: int):
@@ -487,149 +704,4 @@ async def get_recommended_courses(
 #         ]
 #     }
 
-# Helper function to analyze course content
-def analyze_course_content(course_text: str) -> dict:
-    """
-    Analyze course content to extract key terms and themes
-    """
-    nlp = spacy.load('en_core_web_lg')
-    doc = nlp(course_text.lower())
-    
-    # Extract key noun phrases and entities
-    key_terms = []
-    
-    for chunk in doc.noun_chunks:
-        if not chunk.root.is_stop:
-            key_terms.append(chunk.text)
-    
-    for ent in doc.ents:
-        key_terms.append(ent.text)
-    
-    # Remove duplicates and sort
-    key_terms = list(set(key_terms))
-    
-    return {
-        "key_terms": key_terms,
-        "processed_text": " ".join([token.text for token in doc if not token.is_stop])
-    }
-
-
-# ------------------------------------------------------------------------------------------
-
-
-def extract_course_info(pdf_content: bytes) -> dict:
-    """Extract course information from PDF content."""
-    pdf_file = io.BytesIO(pdf_content)
-    pdf_reader = PyPDF2.PdfReader(pdf_file)
-    
-    # Extract text from first page
-    text = pdf_reader.pages[0].extract_text()
-    
-    # Extract title (first line of the PDF)
-    title_pattern = r'^(.+?)(?:\n|$)'
-    title_match = re.search(title_pattern, text)
-    title = title_match.group(1).strip() if title_match else "Unknown Title"
-    
-    # Extract category (looking for "Core Areas" or similar section headers)
-    categories = []
-    category_pattern = r'Core Areas.*?(?:\n|:)\s*(.*?)(?:\n\d|\n\n|$)'
-    category_match = re.search(category_pattern, text, re.DOTALL)
-    if category_match:
-        category_text = category_match.group(1)
-        categories = [cat.strip() for cat in category_text.split('\n') if cat.strip()]
-    category = categories[0] if categories else "General Engineering"
-    
-    # Extract description (text between title and core areas)
-    description_pattern = r'{}\s*(.*?)(?:Core Areas|Applications|Skills Required)'.format(re.escape(title))
-    description_match = re.search(description_pattern, text, re.DOTALL)
-    description = description_match.group(1).strip() if description_match else "No description available"
-    
-    return {
-        "title": title,
-        "category": category,
-        "description": description
-    }
-
-
-
-
-@app.post("/upload-courses-pdf/")
-async def upload_courses(
-    file: UploadFile = File(...),
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """
-    Endpoint to handle PDF upload and process course information
-    """
-    # Check if user is admin
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can upload courses")
-    
-    # Validate file type
-    if not file.filename.endswith('.pdf'):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
-    
-    try:
-        # Read file content
-        content = await file.read()
-        
-        # Extract course information
-        course_info = extract_course_info(content)
-        
-        # Create new course in database
-        new_course = Course(
-            title=course_info["title"],
-            category=course_info["category"],
-            description=course_info["description"]
-        )
-        
-        # Add to database
-        db.add(new_course)
-        db.commit()
-        db.refresh(new_course)
-        
-        return {
-            "message": "Course added successfully",
-            "course": {
-                "title": new_course.title,
-                "category": new_course.category,
-                "description": new_course.description
-            }
-        }
-        
-    except PyPDF2.PdfReadError:
-        raise HTTPException(status_code=400, detail="Invalid PDF file")
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error processing PDF: {str(e)}")
-    finally:
-        await file.close()
-
-@app.get("/courses/all", response_model=List[dict])
-async def get_all_courses(
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can access this resource.")
-
-    courses = db.query(Course).all()
-    return [{"id": course.id, "title": course.title, "category": course.category, "description": course.description} for course in courses]
-
-@app.delete("/courses/{course_id}")
-async def delete_course(
-    course_id: int,
-    current_user: User = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    if current_user.role != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can delete courses.")
-
-    course = db.query(Course).filter(Course.id == course_id).first()
-    if not course:
-        raise HTTPException(status_code=404, detail="Course not found.")
-
-    db.delete(course)
-    db.commit()
-    return {"message": f"Course '{course.title}' deleted successfully."}
+#
