@@ -15,6 +15,7 @@ from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
 from pydantic import EmailStr
 import spacy
 import requests
+from sqlalchemy.sql import func
 import PyPDF2
 import io
 import re
@@ -544,7 +545,7 @@ async def delete_course(
 
 # ---------------------------------------------------------------------------------------
 
-def update_user_recommendations(db: Session, user_id: int):
+async def update_user_recommendations(db: Session, user_id: int):
     nlp = spacy.load("en_core_web_lg")
     
     # Get user and their interests
@@ -560,8 +561,10 @@ def update_user_recommendations(db: Session, user_id: int):
     
     # Calculate new recommendations
     new_recommendations = []
+    recommended_courses_details = []  # To store details for the email
+    
     for course in all_courses:
-        course_text = f"{course.category} {course.description}"
+        course_text = f"{course.title}"
         course_doc = nlp(course_text.lower())
         
         similarity_scores = [
@@ -571,17 +574,47 @@ def update_user_recommendations(db: Session, user_id: int):
         
         max_similarity = max(similarity_scores) if similarity_scores else 0
         
-        if max_similarity >= 0.8:
+        if max_similarity >= 0.55:
             recommendation = RecommendedCourse(
                 user_id=user_id,
                 course_id=course.id,
                 similarity_score=max_similarity
             )
             new_recommendations.append(recommendation)
+            
+            # Collect course details for the email
+            recommended_courses_details.append(
+                f"Course: {course.title}\n"
+                f"Description: {course.description}\n"
+                f"Similarity Score: {max_similarity:.2f}\n"
+            )
     
-    # Add new recommendations to database
     db.bulk_save_objects(new_recommendations)
-    db.commit()
+    db.commit()  # Commit the recommendations before sending the email
+    
+    # Create email content
+    courses_info = "\n\n".join(recommended_courses_details)
+    email_body = (
+        f"Hi {user.firstname},\n\n"
+        f"Here are some course recommendations based on your interests:\n\n"
+        f"{courses_info}\n\n"
+        f"Best regards,\nYour Team"
+    )
+    
+    message = MessageSchema(
+        subject="Recommended Courses for You",
+        recipients=[user.email],
+        body=email_body,
+        subtype="plain"
+    )
+    
+    try:
+        fm = FastMail(conf)
+        await fm.send_message(message)
+        print("Email sent successfully.")
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email")
 
 
 @app.post("/interests")
@@ -631,7 +664,24 @@ async def get_recommended_courses(
     }
 
 
+@app.get("/admin/interest_stats")
+def get_interest_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied. Admins only.")
 
+    stats = db.query(Interest.interest, func.count(Interest.id).label("count")) \
+              .group_by(Interest.interest).all()
+    return [{"interest": stat[0], "count": stat[1]} for stat in stats]
+
+@app.get("/admin/recommendation_stats")
+def get_recommendation_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Access denied. Admins only.")
+
+    stats = db.query(Course.title, func.count(RecommendedCourse.id).label("count")) \
+              .join(RecommendedCourse, RecommendedCourse.course_id == Course.id) \
+              .group_by(Course.title).all()
+    return [{"course_title": stat[0], "count": stat[1]} for stat in stats]
 
 # @app.post("/interests")
 # async def update_interests(

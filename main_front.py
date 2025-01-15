@@ -1,7 +1,8 @@
 import streamlit as st
 import requests
 import time
-
+import pandas as pd
+import matplotlib.pyplot as plt
 
 API_BASE_URL = "http://localhost:8000"
 REGISTER_ENDPOINT = f"{API_BASE_URL}/register"
@@ -48,6 +49,8 @@ def main():
         interests_page()
     elif st.session_state.page == "Recommend Courses":
         recommend_courses_page()
+    elif st.session_state.page == "Admin Insights":  
+        admin_insights_page()
 
 def apply_custom_style():
     st.markdown(
@@ -210,7 +213,7 @@ def register_page():
         first_name = st.text_input("First Name")
         last_name = st.text_input("Last Name")
         email = st.text_input("Email")
-        phone_number = st.number_input("Phone number")
+        phone_number = st.text_input("Phone number")
         password = st.text_input("Password", type="password")
         confirm_password = st.text_input("Confirm Password", type="password")
     
@@ -514,7 +517,73 @@ def admin_dashboard_page():
     except requests.exceptions.RequestException as e:
         st.error(f"Connection error: {str(e)}")
 
+def admin_insights_page():
+    st.title("Admin Insights")
 
+    if "token" not in st.session_state or st.session_state.get("role") != "admin":
+        st.error("Access denied. You must be an admin to view this page.")
+        st.session_state.page = "Login"
+        return
+
+    # Fetch interest stats
+    st.subheader("Interest Statistics")
+    try:
+        interest_response = requests.get(
+            f"{API_BASE_URL}/admin/interest_stats", 
+            headers={"Authorization": f"Bearer {st.session_state.token}"}
+        )
+        if interest_response.status_code == 200:
+            interest_data = interest_response.json()
+            if interest_data:
+                # Convert to DataFrame
+                interest_df = pd.DataFrame(interest_data)
+                
+                # Bar plot for interest stats
+                fig, ax = plt.subplots()
+                ax.bar(interest_df['interest'], interest_df['count'], color='skyblue')
+                ax.set_title("Interest Category Frequencies")
+                ax.set_xlabel("Interests")
+                ax.set_ylabel("Frequency")
+                ax.set_xticks(range(len(interest_df['interest'])))
+                ax.set_xticklabels(interest_df['interest'], rotation=45, ha='right')
+                
+                st.pyplot(fig)
+            else:
+                st.info("No interest data available.")
+        else:
+            st.error(interest_response.json().get("detail", "Failed to fetch interest statistics."))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection error: {str(e)}")
+
+    # Fetch recommendation stats
+    st.subheader("Recommendation Statistics")
+    try:
+        recommendation_response = requests.get(
+            f"{API_BASE_URL}/admin/recommendation_stats", 
+            headers={"Authorization": f"Bearer {st.session_state.token}"}
+        )
+        if recommendation_response.status_code == 200:
+            recommendation_data = recommendation_response.json()
+            if recommendation_data:
+                # Convert to DataFrame
+                recommendation_df = pd.DataFrame(recommendation_data)
+
+                # Bar plot for recommendation stats
+                fig, ax = plt.subplots()
+                ax.bar(recommendation_df['course_title'], recommendation_df['count'], color='lightcoral')
+                ax.set_title("Recommendation Frequencies by Course")
+                ax.set_xlabel("Courses")
+                ax.set_ylabel("Frequency")
+                ax.set_xticks(range(len(recommendation_df['course_title'])))
+                ax.set_xticklabels(recommendation_df['course_title'], rotation=45, ha='right')
+                
+                st.pyplot(fig)
+            else:
+                st.info("No recommendation data available.")
+        else:
+            st.error(recommendation_response.json().get("detail", "Failed to fetch recommendation statistics."))
+    except requests.exceptions.RequestException as e:
+        st.error(f"Connection error: {str(e)}")
 
 def recommend_courses_page():
     st.title("Recommended Courses")
@@ -544,7 +613,7 @@ def recommend_courses_page():
                         with st.expander(f"📚 {course['title']} - Match Score: {course['similarity_score']}"):
                             st.write(f"**title:** {course['title']}")
                             st.write(f"**Description:** {course['description']}")
-                            
+                            st.write(f"**Schedule:** {course['schedule']}")
                             # Add a visual indicator for similarity score
                             score = float(course['similarity_score'])
                             st.progress(score)
