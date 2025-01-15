@@ -43,6 +43,8 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String)
     description = Column(String)
+    schedule = Column(String)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
 
 
 class RecommendedCourse(Base):
