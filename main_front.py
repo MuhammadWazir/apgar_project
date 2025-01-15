@@ -1,7 +1,7 @@
 import streamlit as st
 import requests
 
-API_BASE_URL = "http://localhost:8000"  # Replace with your backend URL
+API_BASE_URL = "http://localhost:8000"
 REGISTER_ENDPOINT = f"{API_BASE_URL}/register"
 LOGIN_ENDPOINT = f"{API_BASE_URL}/login"
 LOGIN_FACE_ENDPOINT = f"{API_BASE_URL}/login_with_face"
@@ -40,37 +40,103 @@ def apply_custom_style():
     st.markdown(
         """
         <style>
+        /* Global styles */
         body {
             background-color: white;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
         }
 
-        .st-emotion-cache-15ecox0{
-            visibility:hidden;
+        .st-emotion-cache-15ecox0 {
+            visibility: hidden;
         }
-        /* Button styling */
+
+        /* Button styling with improved aesthetics */
         button {
-            background-color: #f36106 !important; 
-            color: white !important;              
+            background-color: #f36106 !important;
+            color: white !important;
             border: none !important;
-            border-radius: 5px !important;
-            padding: 10px 15px !important;
+            border-radius: 8px !important;
+            padding: 12px 20px !important;
             font-size: 16px !important;
             cursor: pointer !important;
+            transition: all 0.3s ease !important;
+            box-shadow: 0 2px 4px rgba(243, 97, 6, 0.2) !important;
+            font-weight: 500 !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.5px !important;
         }
 
-        /* Button hover effect */
         button:hover {
-            background-color: #c25005 !important; 
+            background-color: #c25005 !important;
+            transform: translateY(-2px) !important;
+            box-shadow: 0 4px 8px rgba(243, 97, 6, 0.3) !important;
         }
 
-        /* Sidebar styling */
+        button:active {
+            transform: translateY(0) !important;
+            box-shadow: 0 2px 4px rgba(243, 97, 6, 0.2) !important;
+        }
+
+        /* Sidebar improvements */
         .sidebar .sidebar-content {
             background-color: #f8f9fa !important;
+            border-right: 1px solid #e9ecef !important;
+            padding: 20px !important;
         }
 
-        /* Header styling */
-        h1, h2, h3, h4, h5, h6 {
+        .sidebar button {
+            background-color: #f8f9fa !important;
+            border: 1px solid #e9ecef !important;
+            margin: 5px 0 !important;
+            width: 100% !important;
+            text-align: left !important;
+        }
+
+        /* Header styling with better hierarchy */
+        h1 {
             color: #f36106 !important;
+            font-size: 2.5em !important;
+            font-weight: 700 !important;
+            margin-bottom: 0.5em !important;
+            border-bottom: 3px solid rgba(243, 97, 6, 0.2) !important;
+            padding-bottom: 0.2em !important;
+        }
+
+        h2 {
+            color: #f36106 !important;
+            font-size: 2em !important;
+            font-weight: 600 !important;
+            margin: 1em 0 0.5em 0 !important;
+        }
+
+        h3 {
+            color: #f36106 !important;
+            font-size: 1.5em !important;
+            font-weight: 600 !important;
+            margin: 0.8em 0 0.4em 0 !important;
+        }
+
+        /* Input fields styling */
+        .stTextInput input, .stSelectbox select {
+            border-radius: 6px !important;
+            border: 1px solid #e0e0e0 !important;
+            padding: 8px 12px !important;
+            transition: all 0.3s ease !important;
+        }
+
+        .stTextInput input:focus, .stSelectbox select:focus {
+            border-color: #f36106 !important;
+            box-shadow: 0 0 0 2px rgba(243, 97, 6, 0.2) !important;
+        }
+
+        /* Progress bars and metrics */
+        .stProgress > div > div {
+            background-color: rgba(243, 97, 6, 0.2) !important;
+        }
+
+        .stProgress > div > div > div {
+            background-color: #f36106 !important;
         }
         </style>
         """,

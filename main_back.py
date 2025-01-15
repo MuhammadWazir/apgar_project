@@ -11,7 +11,8 @@ from datetime import datetime, timedelta
 from passlib.context import CryptContext
 from dotenv import load_dotenv
 import os
-
+from fastapi_mail import FastMail, MessageSchema, ConnectionConfig
+from pydantic import EmailStr
 import spacy
 import requests
 import PyPDF2
@@ -135,6 +136,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+conf = ConnectionConfig(
+    MAIL_USERNAME="muhammad.elwazir@lau.edu",
+    MAIL_PASSWORD="mW24mW24mW24/", 
+    MAIL_FROM="muhammad.elwazir@lau.edu",
+    MAIL_PORT=587,
+    MAIL_SERVER="outlook.office365.com",
+    MAIL_STARTTLS=True,
+    MAIL_SSL_TLS=False,
+    USE_CREDENTIALS=True
+)
 # Endpoints
 @app.post("/register", status_code=201)
 async def register(
@@ -214,9 +225,7 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
                 detail="Incorrect email or password"
             )
         
-        # Verify password
         valid_password = verify_password(user_credentials.password, user.hashed_password)
-        print(f"Password valid: {valid_password}")  # Debug print
         
         if not valid_password:
             raise HTTPException(
@@ -224,6 +233,20 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
                 detail="Incorrect email or password"
             )
         access_token = create_access_token(data={"sub": user.email, "role": user.role})
+        message = MessageSchema(
+            subject="Login Notification",
+            recipients=[user.email],
+            body=f"Hi {user.firstname}, you just logged into your account.",
+            subtype="plain"
+        )
+        try:
+            fm = FastMail(conf)
+            await fm.send_message(message)
+            print("Sent")
+        except Exception as e:
+            print(f"Error sending email: {e}") 
+            raise HTTPException(status_code=500, detail="Failed to send email")
+
 
         return {"token": access_token, "role": user.role, "status": "success"}
     
