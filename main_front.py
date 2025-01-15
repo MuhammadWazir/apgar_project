@@ -622,15 +622,7 @@ def recommend_courses_page():
                             # Add a visual indicator for similarity score
                             score = float(course['similarity_score'])
                             st.progress(score)
-                            
-                            # Optional: Add action buttons
-                            col1, col2 = st.columns(2)
-                            with col1:
-                                if st.button("Enroll", key=f"enroll_{course['title']}"):
-                                    st.success(f"Enrolled in {course['title']}!")
-                            with col2:
-                                if st.button("Learn More", key=f"more_{course['title']}"):
-                                    st.info("Course details page coming soon!")
+                        
                 else:
                     st.info("No courses match your interests at this time. Try updating your interests!")
                     
