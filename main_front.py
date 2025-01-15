@@ -36,24 +36,18 @@ def main():
         login_page()
     elif st.session_state.page == "Login With Face":
         login_with_face_page()
-<<<<<<< HEAD
-#    elif st.session_state.page == "Pick Interests":
-#        interests_page()
-#    elif st.session_state.page == "Recommend Courses":
-#        recommend_courses_page()
-    elif st.session_state.page == "Admin Dashboard":
+    elif st.session_state.page == "Pick Interests":
+       interests_page()
+    elif st.session_state.page == "Recommend Courses":
+       recommend_courses_page()
+    elif st.session_state.page == "View Courses":
         admin_dashboard_page()
     elif st.session_state.page == "Admin Upload":
         admin_upload_page()
-
-
-
-=======
     elif st.session_state.page == "Pick Interests":
         interests_page()
     elif st.session_state.page == "Recommend Courses":
         recommend_courses_page()
->>>>>>> 763acdd0051e927ff70f4dbead295e23d75e723f
 
 def apply_custom_style():
     st.markdown(
@@ -354,8 +348,60 @@ def login_page():
         st.rerun()
 def interests_page():
     st.title("Pick Interests")
+    if "token" not in st.session_state:
+        st.error("You must be logged in to access this page.")
+        st.session_state.page = "Login"
+        return
 
-<<<<<<< HEAD
+    with st.form("interests_form"):
+        interests = st.multiselect(
+            "Select your interests:",
+            ["Machine Learning", "Data Science", "Web Development", "Mobile Development", "AI",
+             "Career Switch to Tech",
+                "Skill Enhancement",
+                "Personal Project",
+                "Academic Research",
+                "Professional Development",
+                "Starting a Tech Business",
+                "Cybersecurity",
+            "Blockchain",
+            "Internet of Things (IoT)",
+            "Game Development",
+            "UI/UX Design",
+            "Embedded Systems",
+            "AR/VR Development",
+            "Quantum Computing",
+            "Python",
+            "JavaScript",
+            "Java",
+            "C++",
+            "Go",
+            "Rust",
+            "TypeScript",
+            "SQL",
+            "Web Development",
+            "Mobile App Development",
+            "Backend Development",
+            "Frontend Development",
+            "Full Stack Development",
+            "API Development",
+            "DevOps",
+            "Cloud Computing"
+             ]
+        )
+        submit = st.form_submit_button("Save Interests")
+
+        if submit:
+            response = requests.post(INTERESTS_ENDPOINT, json={"interests": interests}, headers={
+                "Authorization": f"Bearer {st.session_state.token}"
+            })
+
+            if response.status_code == 200:
+                st.success("Interests saved successfully!")
+                st.session_state.page = "Recommend Courses"
+                st.rerun()
+            else:
+                st.error(response.json().get("detail", "Failed to save interests."))
 
 def admin_upload_page():
     st.title("Admin Dashboard")
@@ -451,7 +497,6 @@ def admin_dashboard_page():
             else:
                 for course in courses:
                     with st.expander(f"📘 {course['title']}"):
-                        st.write(f"**Category:** {course['category']}")
                         st.write(f"**Description:** {course['description']}")
                         # Assign unique key for each button
                         if st.button(f"Delete {course['title']}", key=f"delete_{course['id']}"):
@@ -471,87 +516,6 @@ def admin_dashboard_page():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-if __name__ =="__main__":
-=======
-    if "token" not in st.session_state:
-        st.error("You must be logged in to access this page.")
-        st.session_state.page = "Login"
-        return
-
-    with st.form("interests_form"):
-        interests = st.multiselect(
-            "Select your interests:",
-            ["Machine Learning", "Data Science", "Web Development", "Mobile Development", "AI",
-             "Career Switch to Tech",
-                "Skill Enhancement",
-                "Personal Project",
-                "Academic Research",
-                "Professional Development",
-                "Starting a Tech Business",
-                "Cybersecurity",
-            "Blockchain",
-            "Internet of Things (IoT)",
-            "Game Development",
-            "UI/UX Design",
-            "Embedded Systems",
-            "AR/VR Development",
-            "Quantum Computing",
-            "Python",
-            "JavaScript",
-            "Java",
-            "C++",
-            "Go",
-            "Rust",
-            "TypeScript",
-            "SQL",
-            "Web Development",
-            "Mobile App Development",
-            "Backend Development",
-            "Frontend Development",
-            "Full Stack Development",
-            "API Development",
-            "DevOps",
-            "Cloud Computing"
-             ]
-        )
-        submit = st.form_submit_button("Save Interests")
-
-        if submit:
-            response = requests.post(INTERESTS_ENDPOINT, json={"interests": interests}, headers={
-                "Authorization": f"Bearer {st.session_state.token}"
-            })
-
-            if response.status_code == 200:
-                st.success("Interests saved successfully!")
-                st.session_state.page = "Recommend Courses"
-                st.rerun()
-            else:
-                st.error(response.json().get("detail", "Failed to save interests."))
 def recommend_courses_page():
     st.title("Recommended Courses")
 
@@ -629,5 +593,4 @@ def recommend_courses_page():
             st.session_state.page = "Login"
             st.rerun()
 if __name__ == "__main__":
->>>>>>> 763acdd0051e927ff70f4dbead295e23d75e723f
     main()
