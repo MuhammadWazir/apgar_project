@@ -267,8 +267,6 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
-
-<<<<<<< HEAD
 def interests_page():
     st.title("Pick Interests")
 
@@ -404,7 +402,3 @@ def recommend_courses_page():
             st.rerun()
 if __name__ == "__main__":
     main()
-=======
-if __name__ =="__main__":
-    main()
->>>>>>> b5272ca84194785077601b14a8b942fe284f294a
