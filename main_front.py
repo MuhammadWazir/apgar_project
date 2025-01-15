@@ -158,6 +158,7 @@ def apply_custom_style():
         """,
         unsafe_allow_html=True
     )
+
 def admin_sidebar():
     st.sidebar.title("Admin Navigation")
     if st.sidebar.button("View Courses", key="admin_dashboard_btn"):
@@ -349,6 +350,8 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
+
+        
 def interests_page():
     st.title("Pick Interests")
     if "token" not in st.session_state:
@@ -359,7 +362,7 @@ def interests_page():
     with st.form("interests_form"):
         interests = st.multiselect(
             "Select your interests:",
-            ["Machine Learning", "Data Science", "Web Development", "Mobile Development", "AI",
+            ["Project Managment", "Machine Learning", "Data Science", "Web Development", "Mobile Development", "AI",
              "Career Switch to Tech",
                 "Skill Enhancement",
                 "Personal Project",
@@ -367,31 +370,32 @@ def interests_page():
                 "Professional Development",
                 "Starting a Tech Business",
                 "Cybersecurity",
-            "Blockchain",
-            "Internet of Things (IoT)",
-            "Game Development",
-            "UI/UX Design",
-            "Embedded Systems",
-            "AR/VR Development",
-            "Quantum Computing",
-            "Python",
-            "JavaScript",
-            "Java",
-            "C++",
-            "Go",
-            "Rust",
-            "TypeScript",
-            "SQL",
-            "Web Development",
-            "Mobile App Development",
-            "Backend Development",
-            "Frontend Development",
-            "Full Stack Development",
-            "API Development",
-            "DevOps",
-            "Cloud Computing"
-             ]
+                "Blockchain",
+                "Internet of Things (IoT)",
+                "Game Development",
+                "UI/UX Design",
+                "Embedded Systems",
+                "AR/VR Development",
+                "Quantum Computing",
+                "Python",
+                "JavaScript",
+                "Java",
+                "C++",
+                "Go",
+                "Rust",
+                "TypeScript",
+                "SQL",
+                "Web Development",
+                "Mobile App Development",
+                "Backend Development",
+                "Frontend Development",
+                "Full Stack Development",
+                "API Development",
+                "DevOps",
+                "Cloud Computing"
+            ]
         )
+
         submit = st.form_submit_button("Save Interests")
 
         if submit:
@@ -405,6 +409,7 @@ def interests_page():
                 st.rerun()
             else:
                 st.error(response.json().get("detail", "Failed to save interests."))
+
 
 def admin_upload_page():
     st.title("Admin Dashboard")

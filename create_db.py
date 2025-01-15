@@ -53,7 +53,6 @@ class RecommendedCourse(Base):
     user_id = Column(Integer, ForeignKey("users.id"))
     course_id = Column(Integer, ForeignKey("courses.id"))
     similarity_score = Column(Float)
-    
     user = relationship("User", backref="recommended_courses")
     course = relationship("Course")
 
