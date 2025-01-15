@@ -124,6 +124,7 @@ app.add_middleware(
 async def register(
     first_name: str = Form(...),
     last_name: str = Form(...),
+    phone_number: str = Form(...),
     email: str = Form(...),
     password: str = Form(...),
     face_image: UploadFile = File(...),
@@ -166,9 +167,10 @@ async def register(
         # Create new user
         hashed_password = get_password_hash(password)
         db_user = User(
-            email=email,
-            first_name=first_name,
-            last_name=last_name,
+            firstname=first_name,
+            lastname=last_name,
+            phone= phone_number,
+            email= email,
             hashed_password=hashed_password,
             role="user",
             face_signature=face_signature.tobytes()  # Convert numpy array to bytes for storage
@@ -246,11 +248,11 @@ async def login_with_face(
         login_face_encoding = face_recognition.face_encodings(image_np, face_locations)[0]
         
         # Get all users with face encodings
-        users = db.query(User).filter(User.face_encoding.isnot(None)).all()
+        users = db.query(User).filter(User.face_signature.isnot(None)).all()
         
         # Check against all stored face encodings
         for user in users:
-            stored_encoding = np.frombuffer(user.face_encoding)
+            stored_encoding = np.frombuffer(user.face_signature)
             match = face_recognition.compare_faces(
                 [stored_encoding], 
                 login_face_encoding,
