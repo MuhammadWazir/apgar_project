@@ -231,19 +231,19 @@ async def login(user_credentials: UserLogin, db: Session = Depends(get_db)):
                 detail="Incorrect email or password"
             )
         access_token = create_access_token(data={"sub": user.email, "role": user.role})
-        message = MessageSchema(
-            subject="Login Notification",
-            recipients=[user.email],
-            body=f"Hi {user.firstname}, you just logged into your account.",
-            subtype="plain"
-        )
-        try:
-            fm = FastMail(conf)
-            await fm.send_message(message)
-            print("Sent")
-        except Exception as e:
-            print(f"Error sending email: {e}") 
-            raise HTTPException(status_code=500, detail="Failed to send email")
+        # message = MessageSchema(
+        #     subject="Login Notification",
+        #     recipients=[user.email],
+        #     body=f"Hi {user.firstname}, you just logged into your account.",
+        #     subtype="plain"
+        # )
+        # try:
+        #     fm = FastMail(conf)
+        #     await fm.send_message(message)
+        #     print("Sent")
+        # except Exception as e:
+        #     print(f"Error sending email: {e}") 
+        #     raise HTTPException(status_code=500, detail="Failed to send email")
 
 
         return {"token": access_token, "role": user.role, "status": "success"}
@@ -342,7 +342,6 @@ import re
 from io import BytesIO
 import logging
 
-# import pdfplumber
 
 import re
 from typing import List, Dict
@@ -561,7 +560,7 @@ def update_user_recommendations(db: Session, user_id: int):
     # Calculate new recommendations
     new_recommendations = []
     for course in all_courses:
-        course_text = f"{course.category} {course.description}"
+        course_text = f"{course.title}"
         course_doc = nlp(course_text.lower())
         
         similarity_scores = [
@@ -571,7 +570,7 @@ def update_user_recommendations(db: Session, user_id: int):
         
         max_similarity = max(similarity_scores) if similarity_scores else 0
         
-        if max_similarity >= 0.8:
+        if max_similarity >= 0.55:
             recommendation = RecommendedCourse(
                 user_id=user_id,
                 course_id=course.id,
@@ -622,8 +621,8 @@ async def get_recommended_courses(
         "courses": [
             {
                 "title": rec.course.title,
-                "category": rec.course.category,
                 "description": rec.course.description,
+                "schedule": rec.course.schedule,
                 "similarity_score": round(rec.similarity_score, 2)
             }
             for rec in recommended_courses
