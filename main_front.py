@@ -251,3 +251,5 @@ def login_page():
     if st.button("Login With Face", key="login_face_button"):
         st.session_state.page = "Login With Face"
         st.rerun()
+if __name__ =="__main__":
+    main()

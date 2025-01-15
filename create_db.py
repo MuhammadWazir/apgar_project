@@ -66,8 +66,9 @@ def initialize_sample_data():
         
     # Add a sample users
     sample_user_admin = User(
-        first_name="admin",
-        last_name="admin",
+        firstname="admin",
+        lastname="admin",
+        phone= "123",
         email="admin@gmail.com",
         hashed_password=pwd_context.hash("admin"),
         role="admin"
@@ -75,8 +76,9 @@ def initialize_sample_data():
     db.add(sample_user_admin)
 
     sample_user = User(
-        first_name="user",
-        last_name="user",
+        firstname="user",
+        lastname="user",
+        phone= "123",
         email="user@gmail.com",
         hashed_password=pwd_context.hash("user"),
         role="user"
